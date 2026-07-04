@@ -59,15 +59,24 @@ if __name__ == "__main__":
         from starlette.routing import Route
         from starlette.requests import Request
         from starlette.responses import Response, PlainTextResponse
+        from mcp.server.transport_security import TransportSecuritySettings
 
         BASE_URL = "https://quiz-mcp-server.onrender.com"
         PORT = int(os.getenv("PORT", 8000))
 
         # Build the HTTP app
+        # The SDK's default DNS-rebinding protection only allowlists localhost, which
+        # rejects Render's real Host header. Keep protection on, but allow our real host.
+        _render_host = BASE_URL.replace("https://", "").replace("http://", "")
         mcp_http = FastMCP(
             name="quizapp",
             json_response=True,
             instructions=_INSTRUCTIONS,
+            transport_security=TransportSecuritySettings(
+                enable_dns_rebinding_protection=True,
+                allowed_hosts=[_render_host],
+                allowed_origins=[BASE_URL],
+            ),
         )
         quiz_tools.register(mcp_http)
 
