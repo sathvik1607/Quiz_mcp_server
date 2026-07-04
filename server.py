@@ -10,11 +10,14 @@ import config                       # MUST be first import — loads .env before
 
 from mcp.server.fastmcp import FastMCP
 from tools import example as example_tools
+from tools import leaderboard as leaderboard_tools
 
 _INSTRUCTIONS = (
     "You are connected to the Quiz App server. "
     "Call get_today when the user asks about the current date. "
     "Use count_records to look up row counts in a database table. "
+    "Call generate_leaderboard whenever the user asks to see the leaderboard, "
+    "standings, or rankings, at any point during the quiz. "
     "IMPORTANT — server cold start: if a tool call times out or returns a connection error "
     "on the first attempt, the server is warming up (takes up to 50 seconds). Tell the user "
     "'The server is starting up — please hold on...' then retry the same tool once after a wait."
@@ -24,6 +27,7 @@ _INSTRUCTIONS = (
 # Module-level mcp — used for stdio (Claude Desktop) and `mcp dev` inspector.
 mcp = FastMCP(name="quizapp", json_response=True, instructions=_INSTRUCTIONS)
 example_tools.register(mcp)
+leaderboard_tools.register(mcp)
 
 
 if __name__ == "__main__":
@@ -49,6 +53,7 @@ if __name__ == "__main__":
             instructions=_INSTRUCTIONS,
         )
         example_tools.register(mcp_http)
+        leaderboard_tools.register(mcp_http)
 
         # IMPORTANT: inject routes directly into the FastMCP app's router.
         # Do NOT wrap it in an outer Starlette app — that breaks the FastMCP lifespan.
