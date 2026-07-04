@@ -17,6 +17,26 @@ def _next_question_number(after=None):
     return row.qn
 
 
+def _next_unanswered_question(user_id):
+    with config.engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT MIN(q.question_number) AS qn
+                FROM questions q
+                WHERE q.question_number NOT IN (
+                    SELECT question_number FROM attempts WHERE user_id = :uid
+                )
+            """),
+            {"uid": user_id},
+        ).fetchone()
+    return row.qn
+
+
+def _total_questions():
+    with config.engine.connect() as conn:
+        return conn.execute(text("SELECT COUNT(*) AS c FROM questions")).fetchone().c
+
+
 def _current_streak(user_id):
     with config.engine.connect() as conn:
         rows = conn.execute(
@@ -34,14 +54,14 @@ def _current_streak(user_id):
 def _leaderboard():
     with config.engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT u.full_name, u.unique_id, COALESCE(SUM(a.points_earned), 0) AS total_points
+            SELECT u.full_name, COALESCE(SUM(a.points_earned), 0) AS total_points
             FROM users u
             LEFT JOIN attempts a ON a.user_id = u.id
-            GROUP BY u.id, u.full_name, u.unique_id
+            GROUP BY u.id, u.full_name
             ORDER BY total_points DESC
         """)).fetchall()
     return [
-        {"rank": i + 1, "name": r.full_name, "unique_id": r.unique_id, "points": r.total_points}
+        {"rank": i + 1, "name": r.full_name, "points": r.total_points}
         for i, r in enumerate(rows)
     ]
 
@@ -52,7 +72,10 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool()
     def register_user(name: str, unique_id: str) -> dict:
         """
-        Register a new user for the quiz.
+        Register a new user for the quiz, or resume an existing one. If unique_id
+        already belongs to a registered user, this returns their info and their
+        next unanswered question instead of erroring — always call this at the
+        start of a session and use whatever it returns.
 
         Args:
             name: The user's full name.
@@ -61,6 +84,20 @@ def register(mcp: FastMCP) -> None:
         unique_id = unique_id.strip()
         if len(unique_id) < 4:
             return {"error": "unique_id must be at least 4 characters."}
+
+        with config.engine.connect() as conn:
+            existing = conn.execute(
+                text("SELECT id, full_name FROM users WHERE unique_id = :uid"),
+                {"uid": unique_id},
+            ).fetchone()
+
+        if existing:
+            return {
+                "message": f"Welcome back, {existing.full_name}!",
+                "unique_id": unique_id,
+                "already_registered": True,
+                "next_question_number": _next_unanswered_question(existing.id),
+            }
 
         try:
             with config.engine.begin() as conn:
@@ -74,6 +111,7 @@ def register(mcp: FastMCP) -> None:
         return {
             "message": f"{name} registered successfully.",
             "unique_id": unique_id,
+            "already_registered": False,
             "first_question_number": _next_question_number(),
         }
 
@@ -81,21 +119,28 @@ def register(mcp: FastMCP) -> None:
     def get_question(question_number: int) -> dict:
         """
         Get a quiz question by its number. Call this when the user accepts a
-        challenge (e.g. "Accepting Challenge 1" -> question_number=1).
+        challenge (e.g. "Accepting Challenge 1" -> question_number=1). May include
+        a reference_link — if present, show it to the user as a highlighted link
+        for them to open themselves; never fetch it yourself.
 
         Args:
             question_number: The number of the question to retrieve.
         """
         with config.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT question, points FROM questions WHERE question_number = :qn"),
+                text("SELECT question, points, reference_link FROM questions WHERE question_number = :qn"),
                 {"qn": question_number},
             ).fetchone()
 
         if row is None:
             return {"error": f"No question found with number {question_number}."}
 
-        return {"question_number": question_number, "question": row.question, "points": row.points}
+        return {
+            "question_number": question_number,
+            "question": row.question,
+            "points": row.points,
+            "reference_link": row.reference_link,
+        }
 
     @mcp.tool()
     def validate_answer(unique_id: str, question_number: int, answer: str) -> dict:
@@ -163,3 +208,51 @@ def register(mcp: FastMCP) -> None:
         Get the current quiz leaderboard, ranked by total points.
         """
         return {"leaderboard": _leaderboard()}
+
+    @mcp.tool()
+    def review_answers(unique_id: str) -> dict:
+        """
+        Show the correct answers for a user's incorrect attempts. Only works once
+        the user has answered every question — call this only after next_question_number
+        has come back null and the user asks to review what they got wrong.
+
+        Args:
+            unique_id: The user's unique id from registration.
+        """
+        with config.engine.connect() as conn:
+            user = conn.execute(
+                text("SELECT id FROM users WHERE unique_id = :uid"),
+                {"uid": unique_id},
+            ).fetchone()
+            if user is None:
+                return {"error": f"No user registered with unique_id '{unique_id}'."}
+
+            answered = conn.execute(
+                text("SELECT COUNT(*) AS c FROM attempts WHERE user_id = :uid"),
+                {"uid": user.id},
+            ).fetchone().c
+            total = _total_questions()
+            if answered < total:
+                return {"error": "You must answer every question before reviewing answers."}
+
+            rows = conn.execute(
+                text("""
+                    SELECT a.question_number, a.submitted_answer, a.is_correct, q.answer AS correct_answer
+                    FROM attempts a
+                    JOIN questions q ON q.question_number = a.question_number
+                    WHERE a.user_id = :uid AND a.is_correct = 0
+                    ORDER BY a.question_number
+                """),
+                {"uid": user.id},
+            ).fetchall()
+
+        return {
+            "incorrect_answers": [
+                {
+                    "question_number": r.question_number,
+                    "your_answer": r.submitted_answer,
+                    "correct_answer": r.correct_answer,
+                }
+                for r in rows
+            ]
+        }
