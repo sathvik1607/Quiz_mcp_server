@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from tools import example as example_tools
 
 _INSTRUCTIONS = (
-    "You are connected to MyApp analytics. "
+    "You are connected to the Quiz App server. "
     "Call get_today when the user asks about the current date. "
     "Use count_records to look up row counts in a database table. "
     "IMPORTANT — server cold start: if a tool call times out or returns a connection error "
@@ -22,7 +22,7 @@ _INSTRUCTIONS = (
 )
 
 # Module-level mcp — used for stdio (Claude Desktop) and `mcp dev` inspector.
-mcp = FastMCP(name="myapp", json_response=True, instructions=_INSTRUCTIONS)
+mcp = FastMCP(name="quizapp", json_response=True, instructions=_INSTRUCTIONS)
 example_tools.register(mcp)
 
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
         # Build the HTTP app
         mcp_http = FastMCP(
-            name="myapp",
+            name="quizapp",
             json_response=True,
             instructions=_INSTRUCTIONS,
         )

@@ -1,4 +1,4 @@
-# myapp MCP server
+# Quiz App MCP server
 
 A Python MCP (Model Context Protocol) server built with FastMCP. Exposes tools to:
 - **Claude Desktop**, locally, over stdio
@@ -48,7 +48,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "myapp": {
+    "quizapp": {
       "command": "C:\\path\\to\\project\\venv\\Scripts\\python.exe",
       "args": ["C:\\path\\to\\project\\server.py"]
     }
