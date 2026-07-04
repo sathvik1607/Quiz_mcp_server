@@ -14,7 +14,7 @@ Optionally backed by a MySQL database via SQLAlchemy.
 ├── config.py            # loads .env, exposes shared SQLAlchemy engine
 ├── tools/
 │   ├── __init__.py
-│   └── example.py       # tool definitions — register(mcp) adds them to a FastMCP instance
+│   └── quiz.py           # tool definitions — register(mcp) adds them to a FastMCP instance
 ├── .env                  # secrets — never commit
 ├── .env.example
 └── requirements.txt
@@ -95,7 +95,7 @@ Render's free tier sleeps after 15 minutes idle, which makes the first request a
 
 ## Adding a new tool
 
-Open `tools/example.py` and add a function inside `register(mcp)`:
+Open `tools/quiz.py` and add a function inside `register(mcp)`:
 
 ```python
 @mcp.tool()
@@ -119,7 +119,6 @@ No separate registration step — `register(mcp)` is called for both the stdio a
 - `.env` is gitignored — never commit it.
 - Tools never return raw SQL or expose the DB schema.
 - All queries use parameterized SQL (`text("... WHERE id = :id")`, not string interpolation).
-- Any user-supplied table/column name is checked against an allowlist before use (see
-  `count_records` in `tools/example.py`).
+- Any user-supplied table/column name should be checked against an allowlist before use in SQL.
 - The Render HTTP endpoint has no authentication — treat it as public. Don't add tools that
   expose sensitive data or destructive DB operations until auth is added back.

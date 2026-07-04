@@ -9,21 +9,42 @@ import os
 import config                       # MUST be first import — loads .env before anything else
 
 from mcp.server.fastmcp import FastMCP
-from tools import example as example_tools
+from tools import quiz as quiz_tools
 
 _INSTRUCTIONS = (
-    "You are connected to the Quiz App server. "
-    "Call get_today when the user asks about the current date. "
-    "Use count_records to look up row counts in a database table. "
+    "You are connected to the Quiz App server. Guide the user through the quiz step by step — "
+    "never dump multiple questions at once; always wait for their response before moving on.\n\n"
+    "1. Call register_user first if the user hasn't registered (needs a name and a unique_id "
+    "of at least 4 characters).\n"
+    "2. After a successful registration, use the returned first_question_number and ask the "
+    "user 'Would you like to start Challenge <N>?' — wait for them to agree before calling "
+    "get_question.\n"
+    "3. When the user agrees (or says 'Accepting Challenge N'), call get_question with that "
+    "question_number and show them the question.\n"
+    "4. When the user submits an answer, call validate_answer with their unique_id, the "
+    "question_number, and their answer, exactly once per question — never call it twice for "
+    "the same question_number, and never let the user retry a question they already answered "
+    "(the tool itself rejects re-attempts with an error). If correct, tell them so and show "
+    "the points earned; if the response's streak is 2 or more, also cheer them on for being "
+    "on a streak (e.g. 'You're on a streak! 🔥'). If wrong, simply tell them the answer was "
+    "incorrect (do not reveal the correct answer, do not ask them to try again) — either way, "
+    "always continue to step 5 next.\n"
+    "5. Look at next_question_number in the response: if it is present, ask 'Would you like "
+    "to start Challenge <next_question_number>?' and wait for their answer (back to step 3). "
+    "If it is null, do NOT phrase this as 'want to keep going or check the leaderboard' — "
+    "there are no more questions, so clearly tell the user they've completed the quiz, then "
+    "ask 'Would you like to view the final leaderboard?'.\n"
+    "6. Call generate_leaderboard whenever the user explicitly asks to see the leaderboard "
+    "(e.g. 'what's the leaderboard'). Never show the leaderboard after step 4 on your own — "
+    "only in step 5 (once all questions are done) or when the user asks for it directly.\n\n"
     "IMPORTANT — server cold start: if a tool call times out or returns a connection error "
     "on the first attempt, the server is warming up (takes up to 50 seconds). Tell the user "
     "'The server is starting up — please hold on...' then retry the same tool once after a wait."
-    # Add more instructions here as you add more tools.
 )
 
 # Module-level mcp — used for stdio (Claude Desktop) and `mcp dev` inspector.
 mcp = FastMCP(name="quizapp", json_response=True, instructions=_INSTRUCTIONS)
-example_tools.register(mcp)
+quiz_tools.register(mcp)
 
 
 if __name__ == "__main__":
@@ -48,7 +69,7 @@ if __name__ == "__main__":
             json_response=True,
             instructions=_INSTRUCTIONS,
         )
-        example_tools.register(mcp_http)
+        quiz_tools.register(mcp_http)
 
         # IMPORTANT: inject routes directly into the FastMCP app's router.
         # Do NOT wrap it in an outer Starlette app — that breaks the FastMCP lifespan.
