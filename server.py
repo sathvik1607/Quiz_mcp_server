@@ -60,7 +60,7 @@ if __name__ == "__main__":
         from starlette.requests import Request
         from starlette.responses import Response, PlainTextResponse
 
-        BASE_URL = "https://your-app.onrender.com"      # <-- CHANGE THIS to your Render URL
+        BASE_URL = "https://quiz-mcp-server.onrender.com"
         PORT = int(os.getenv("PORT", 8000))
 
         # Build the HTTP app
